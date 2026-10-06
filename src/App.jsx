@@ -118,6 +118,11 @@ function getDuplicateIds(uploads) {
   return new Set(uploads.filter((file) => file.hash && counts[file.hash] > 1).map((file) => file.id))
 }
 
+function ownerOfHash(file, uploads, matches) {
+  if (!file.hash) return null
+  return Object.entries(matches).find(([, uploadId]) => uploads.find((upload) => upload.id === uploadId)?.hash === file.hash)?.[0] ?? null
+}
+
 function filenameTokens(filename) {
   return filename.toLowerCase().replace(/\.pdf$/i, '').split(/[^a-z0-9]+/).filter((token) => token.length > 1 && !['document', 'copy', 'scan', 'final', 'signed', 'file', 'pdf'].includes(token))
 }
@@ -270,7 +275,32 @@ function Workspace({ tender, requirements, t, lang, blocking, uploads, matches, 
   return <section className="workspace">
     <div className="tender-card card"><div className="section-kicker">01 / {t.tender}</div><div className="tender-heading"><span className="id-chip">{tender.tender_id}</span><h2>{tender.title}</h2></div><div className="facts"><Fact label={t.entity} value={tender.procuring_entity}/><Fact label={t.bidder} value={tender.bidder}/><Fact label={t.deadline} value={new Date(`${tender.submission_deadline}T00:00:00`).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-GB', { day:'2-digit', month:'short', year:'numeric' })}/></div></div>
     <aside className={`readiness card ${blocking ? '' : 'is-ready'}`} data-state-label={blocking ? t.blockedLabel : t.readyLabel}><div className="section-kicker">02 / {t.scan}</div><div className="readiness-number"><span>{blocking}</span><small>{t.clear}</small></div><div className="meter"><i style={{width: `${requirements.length ? (readyCount / requirements.length) * 100 : 0}%`}} /></div><p>{readyCount} / {requirements.length} {t.progress}</p><div className="blocking-reasons">{blockingReasons.length ? <><strong>{t.blockingReasons}</strong><ul>{blockingReasons.map((status) => <li key={status}><span className={`reason-dot ${status}`} />{t[status]}<b>{statusCounts[status]}</b></li>)}</ul></> : <p className="clear-state">{t.noBlockers}</p>}</div>{packageError && <p className="package-error">{packageError === 'validation' ? t.packageInvalid : t.packageFailed}</p>}<button onClick={onGenerate} disabled={blocking > 0 || isGenerating}>{isGenerating ? t.generating : t.generate} <span>→</span></button>{generatedPackage && <div className="download-ready"><p>{t.downloadReady}</p><a href={generatedPackage.url} download={generatedPackage.filename}>{t.downloadPackage} ↓</a></div>}</aside>
-    <section className="checklist card"><div className="checklist-top"><div><div className="section-kicker">03 / {t.checklist}</div><h2>{requirements.length} <span>{t.requirements}</span></h2></div><div className="legend"><span><i className="dot red" />{t.missing}</span><span><i className="dot amber" />{t.dateNeeded}</span><span><i className="dot dim" />{t.notProvided}</span><span><i className="dot cyan" />{t.ok}</span></div></div><p className="mapping-hint">⌁ {t.mapHint}</p><div className="table"><div className="row row-head"><span>{t.order}</span><span>{t.checklist}</span><span>{t.expiry}</span><span>{t.mapping}</span><span>{t.status}</span></div>{requirements.map((item) => { const matchedId = matches[item.id]; const matchedUpload = uploads.find((file) => file.id === matchedId); const status = getStatus(item, matchedUpload, expiries[item.id], tender.submission_deadline); const choices = uploads.filter((file) => !file.error && !file.inspecting); return <div className="row" key={item.id}><span className="order">{String(item.order).padStart(2, '0')}</span><div className="doc"><strong>{lang === 'bn' ? item.title_bn : item.title_en}</strong><small>{item.id} · {item.mandatory ? t.mandatory : t.optional}</small></div><span className={item.has_expiry ? 'expiry yes' : 'expiry'}>{item.has_expiry && matchedUpload ? <input aria-label={`${t.enterExpiry} ${item.id}`} type="date" value={expiries[item.id] ?? ''} onChange={(event) => onExpiry(item.id, event.target.value)} /> : item.has_expiry ? `◷ ${t.expiry}` : `— ${t.noExpiry}`}</span><div className="match-control"><select aria-label={`${t.match} ${item.id}`} value={matchedId || ''} onChange={(event) => onMatch(item.id, event.target.value)}><option value="">{t.chooseFile}</option>{choices.map((file) => { const owner = Object.keys(matches).find((requirementId) => matches[requirementId] === file.id); const identicalOwner = file.hash && Object.entries(matches).find(([, uploadId]) => uploads.find((upload) => upload.id === uploadId)?.hash === file.hash)?.[0]; const blockedDuplicate = Boolean(identicalOwner && identicalOwner !== item.id); return <option disabled={blockedDuplicate} value={file.id} key={file.id}>{file.name}{owner && owner !== item.id ? ` — ${owner}` : ''}</option> })}</select>{matchedUpload && <button type="button" onClick={() => onMatch(item.id, '')}>{t.undo}</button>}</div><span className={`status ${status}`}>{t[status]}</span></div>})}</div></section>
+    <section className="checklist card">
+      <div className="checklist-top"><div><div className="section-kicker">03 / {t.checklist}</div><h2>{requirements.length} <span>{t.requirements}</span></h2></div><div className="legend"><span><i className="dot red" />{t.missing}</span><span><i className="dot amber" />{t.dateNeeded}</span><span><i className="dot dim" />{t.notProvided}</span><span><i className="dot cyan" />{t.ok}</span></div></div>
+      <p className="mapping-hint">⌁ {t.mapHint}</p>
+      <div className="table">
+        <div className="row row-head"><span>{t.order}</span><span>{t.checklist}</span><span>{t.expiry}</span><span>{t.mapping}</span><span>{t.status}</span></div>
+        {requirements.map((item) => {
+          const matchedId = matches[item.id]
+          const matchedUpload = uploads.find((file) => file.id === matchedId)
+          const status = getStatus(item, matchedUpload, expiries[item.id], tender.submission_deadline)
+          const choices = uploads.filter((file) => !file.error && !file.inspecting)
+          return <div className="row" key={item.id}>
+            <span className="order">{String(item.order).padStart(2, '0')}</span>
+            <div className="doc"><strong>{lang === 'bn' ? item.title_bn : item.title_en}</strong><small>{item.id} · {item.mandatory ? t.mandatory : t.optional}</small></div>
+            <span className={item.has_expiry ? 'expiry yes' : 'expiry'}>{item.has_expiry && matchedUpload ? <input aria-label={`${t.enterExpiry} ${item.id}`} type="date" value={expiries[item.id] ?? ''} onChange={(event) => onExpiry(item.id, event.target.value)} /> : item.has_expiry ? `◷ ${t.expiry}` : `— ${t.noExpiry}`}</span>
+            <div className="match-control"><select aria-label={`${t.match} ${item.id}`} value={matchedId || ''} onChange={(event) => onMatch(item.id, event.target.value)}><option value="">{t.chooseFile}</option>{choices.map((file) => {
+              const owner = Object.keys(matches).find((requirementId) => matches[requirementId] === file.id)
+              const identicalOwner = duplicateIds.has(file.id) ? ownerOfHash(file, uploads, matches) : null
+              const blockedDuplicate = Boolean(identicalOwner && identicalOwner !== item.id)
+              const label = blockedDuplicate ? ` — ${t.duplicate}: ${identicalOwner}` : owner && owner !== item.id ? ` — ${owner}` : ''
+              return <option disabled={blockedDuplicate} value={file.id} key={file.id}>{file.name}{label}</option>
+            })}</select>{matchedUpload && <button type="button" onClick={() => onMatch(item.id, '')}>{t.undo}</button>}</div>
+            <span className={`status ${status}`}>{t[status]}</span>
+          </div>
+        })}
+      </div>
+    </section>
     <UploadPanel uploads={uploads} matches={matches} requirements={requirements} duplicateIds={duplicateIds} suggestionTargets={suggestionTargets} ignoredSuggestions={ignoredSuggestions} t={t} lang={lang} onAddUploads={onAddUploads} onRemoveUpload={onRemoveUpload} onMatch={onMatch} onSuggestionTarget={onSuggestionTarget} onIgnoreSuggestion={onIgnoreSuggestion} inputRef={pdfInputRef} onInput={onPdfInput} />
     <section className="privacy"><span className="lock">⌑</span><div><strong>{t.local}</strong><p>{t.localCopy}</p></div><span className="privacy-line" /></section>
   </section>
