@@ -1,4 +1,11 @@
-import { useReducer, useRef } from 'react'
+import { useReducer, useRef, useState } from 'react'
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+
+GlobalWorkerOptions.workerSrc = pdfWorker
+
+const MAX_FILES = 30
+const MAX_TOTAL_BYTES = 50 * 1024 * 1024
 
 const copy = {
   en: {
@@ -11,7 +18,7 @@ const copy = {
     missing: 'Missing', notProvided: 'Not provided', dateNeeded: 'Expiry date needed', expired: 'Expired', ready: 'Ready',
     scan: 'Package readiness', clear: 'blocking items', readyText: 'Ready to assemble', progress: 'requirements ready', next: 'Next: upload source PDFs',
     invalid: 'Could not import this file', errors: 'Review the JSON schema and try again.', local: 'Local-only workspace', localCopy: 'Tender data is processed in this browser only.',
-    footer: 'TenderPulse / precision in every page'
+    footer: 'TenderPulse / precision in every page', upload: 'Source PDF intake', drop: 'Drop PDF files here', browse: 'Choose PDFs', uploadHint: 'PDF only · up to 30 files · 50 MB total', queue: 'Upload queue', files: 'files', pages: 'pages', remove: 'Remove', rejected: 'Rejected', processing: 'Reading pages…', corrupt: 'Unreadable or corrupt PDF', protected: 'Password-protected PDF', nonPdf: 'Only PDF files are accepted', fileLimit: 'Maximum of 30 files reached', sizeLimit: 'Total file size cannot exceed 50 MB', emptyQueue: 'No source PDFs selected yet.'
   },
   bn: {
     eyebrow: 'টেন্ডার প্যাকেজ কমান্ড সেন্টার', title: 'প্রতিটি জমা দিন', accent: 'নির্ভুলভাবে।',
@@ -23,17 +30,20 @@ const copy = {
     missing: 'অনুপস্থিত', notProvided: 'প্রদান করা হয়নি', dateNeeded: 'মেয়াদ তারিখ প্রয়োজন', expired: 'মেয়াদ শেষ', ready: 'প্রস্তুত',
     scan: 'প্যাকেজ প্রস্তুতি', clear: 'টি বাধা', readyText: 'সংযোজনের জন্য প্রস্তুত', progress: 'টি শর্ত প্রস্তুত', next: 'পরবর্তী: উৎস PDF আপলোড করুন',
     invalid: 'এই ফাইলটি আমদানি করা যায়নি', errors: 'JSON কাঠামো দেখে আবার চেষ্টা করুন।', local: 'শুধু স্থানীয় ওয়ার্কস্পেস', localCopy: 'টেন্ডারের তথ্য কেবল এই ব্রাউজারেই প্রক্রিয়াকৃত হয়।',
-    footer: 'TenderPulse / প্রতিটি পাতায় নির্ভুলতা'
+    footer: 'TenderPulse / প্রতিটি পাতায় নির্ভুলতা', upload: 'উৎস PDF গ্রহণ', drop: 'এখানে PDF ফাইল রাখুন', browse: 'PDF বেছে নিন', uploadHint: 'শুধু PDF · সর্বোচ্চ ৩০ ফাইল · মোট ৫০ MB', queue: 'আপলোড সারি', files: 'ফাইল', pages: 'পৃষ্ঠা', remove: 'মুছুন', rejected: 'প্রত্যাখ্যাত', processing: 'পৃষ্ঠা পড়া হচ্ছে…', corrupt: 'PDF পড়া যায়নি বা নষ্ট', protected: 'পাসওয়ার্ড-সুরক্ষিত PDF', nonPdf: 'শুধু PDF গ্রহণ করা হয়', fileLimit: 'সর্বোচ্চ ৩০টি ফাইল গ্রহণযোগ্য', sizeLimit: 'মোট ফাইলের আকার ৫০ MB-এর বেশি হতে পারে না', emptyQueue: 'এখনও কোনো উৎস PDF বাছাই করা হয়নি।'
   }
 }
 
-const initialState = { lang: 'en', package: null, error: null }
+const initialState = { lang: 'en', package: null, error: null, uploads: [] }
 
 function reducer(state, action) {
   switch (action.type) {
     case 'TOGGLE_LANG': return { ...state, lang: state.lang === 'en' ? 'bn' : 'en' }
     case 'LOAD': return { ...state, package: action.payload, error: null }
     case 'ERROR': return { ...state, error: action.payload }
+    case 'ADD_UPLOADS': return { ...state, uploads: [...state.uploads, ...action.payload] }
+    case 'PATCH_UPLOAD': return { ...state, uploads: state.uploads.map((file) => file.id === action.payload.id ? { ...file, ...action.payload } : file) }
+    case 'REMOVE_UPLOAD': return { ...state, uploads: state.uploads.filter((file) => file.id !== action.payload) }
     default: return state
   }
 }
@@ -63,9 +73,24 @@ function validateRequirements(data) {
 
 function getStatus(requirement) { return requirement.mandatory ? 'missing' : 'notProvided' }
 
+function createUpload(file) {
+  return { id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`, file, name: file.name, bytes: file.size, pages: null, error: null, inspecting: true }
+}
+
+function getPdfError(error) {
+  if (error?.name === 'PasswordException') return 'protected'
+  return 'corrupt'
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`
+}
+
 function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const inputRef = useRef(null)
+  const pdfInputRef = useRef(null)
   const t = copy[state.lang]
   const requirements = state.package?.requirements ?? []
   const blocking = requirements.filter((item) => item.mandatory).length
@@ -80,6 +105,39 @@ function App() {
       else dispatch({ type: 'LOAD', payload: { tender: data.tender, requirements: [...data.requirements].sort((a, b) => a.order - b.order) } })
     } catch { dispatch({ type: 'ERROR', payload: ['The selected file is not valid JSON.'] }) }
   }
+  const inspectUpload = async (upload) => {
+    let pdf
+    try {
+      const bytes = new Uint8Array(await upload.file.arrayBuffer())
+      const task = getDocument({ data: bytes, disableAutoFetch: true, disableStream: true })
+      pdf = await task.promise
+      dispatch({ type: 'PATCH_UPLOAD', payload: { id: upload.id, pages: pdf.numPages, inspecting: false } })
+    } catch (error) {
+      dispatch({ type: 'PATCH_UPLOAD', payload: { id: upload.id, error: getPdfError(error), inspecting: false } })
+    } finally {
+      pdf?.destroy().catch(() => {})
+    }
+  }
+  const addUploads = (list) => {
+    const selected = Array.from(list ?? [])
+    if (!selected.length) return
+    const accepted = state.uploads.filter((item) => !item.error)
+    let count = accepted.length
+    let bytes = accepted.reduce((sum, item) => sum + item.bytes, 0)
+    const additions = selected.map((file) => {
+      const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+      const upload = createUpload(file)
+      if (!isPdf) return { ...upload, error: 'nonPdf', inspecting: false }
+      if (count >= MAX_FILES) return { ...upload, error: 'fileLimit', inspecting: false }
+      if (bytes + file.size > MAX_TOTAL_BYTES) return { ...upload, error: 'sizeLimit', inspecting: false }
+      count += 1
+      bytes += file.size
+      return upload
+    })
+    dispatch({ type: 'ADD_UPLOADS', payload: additions })
+    additions.filter((item) => item.inspecting).forEach(inspectUpload)
+  }
+  const handlePdfInput = (event) => { addUploads(event.target.files); event.target.value = '' }
   return <main className="shell">
     <div className="orb orb-a" /><div className="orb orb-b" /><div className="grid" />
     <nav className="nav"><a className="brand" href="#top" aria-label="TenderPulse home"><span className="brand-mark">T</span><span>TENDER<span>PULSE</span></span></a><button className="language" onClick={() => dispatch({ type: 'TOGGLE_LANG' })}><span className="globe">◎</span>{t.language}</button></nav>
@@ -90,18 +148,31 @@ function App() {
       <div className="signal-card"><div className="signal-top"><span>LIVE · LOCAL</span><span className="pulse" /></div><div className="signal-ring"><span>{requirements.length || '—'}</span><small>{requirements.length ? t.requirements : 'REQUIREMENTS'}</small></div><div className="signal-bottom"><span>{state.package?.tender.tender_id || 'NO TENDER'}</span><span>◌ 100% PRIVATE</span></div></div>
     </section>
     {state.error && <section className="error card"><div className="error-icon">!</div><div><strong>{t.invalid}</strong><p>{t.errors}</p><ul>{state.error.map((e) => <li key={e}>{e}</li>)}</ul></div><button onClick={() => dispatch({type:'ERROR', payload:null})}>×</button></section>}
-    {!state.package ? <section className="empty card"><div className="empty-radar"><span>⌁</span></div><h2>{t.noTender}</h2><p>{t.noTenderCopy}</p><button className="text-button" onClick={() => inputRef.current?.click()}>{t.import} <span>→</span></button></section> : <Workspace tender={state.package.tender} requirements={requirements} t={t} lang={state.lang} blocking={blocking}/>} 
+    {!state.package ? <section className="empty card"><div className="empty-radar"><span>⌁</span></div><h2>{t.noTender}</h2><p>{t.noTenderCopy}</p><button className="text-button" onClick={() => inputRef.current?.click()}>{t.import} <span>→</span></button></section> : <Workspace tender={state.package.tender} requirements={requirements} t={t} lang={state.lang} blocking={blocking} uploads={state.uploads} onAddUploads={addUploads} onRemoveUpload={(id) => dispatch({ type: 'REMOVE_UPLOAD', payload: id })} pdfInputRef={pdfInputRef} onPdfInput={handlePdfInput}/>} 
     <footer><span>{t.footer}</span><span>EN · BN · LOCAL FIRST</span></footer>
   </main>
 }
 
-function Workspace({ tender, requirements, t, lang, blocking }) {
+function Workspace({ tender, requirements, t, lang, blocking, uploads, onAddUploads, onRemoveUpload, pdfInputRef, onPdfInput }) {
   return <section className="workspace">
     <div className="tender-card card"><div className="section-kicker">01 / {t.tender}</div><div className="tender-heading"><span className="id-chip">{tender.tender_id}</span><h2>{tender.title}</h2></div><div className="facts"><Fact label={t.entity} value={tender.procuring_entity}/><Fact label={t.bidder} value={tender.bidder}/><Fact label={t.deadline} value={new Date(`${tender.submission_deadline}T00:00:00`).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-GB', { day:'2-digit', month:'short', year:'numeric' })}/></div></div>
     <aside className="readiness card"><div className="section-kicker">02 / {t.scan}</div><div className="readiness-number"><span>{blocking}</span><small>{t.clear}</small></div><div className="meter"><i style={{width: '0%'}} /></div><p>0 / {requirements.length} {t.progress}</p><button disabled>{t.next} <span>→</span></button></aside>
     <section className="checklist card"><div className="checklist-top"><div><div className="section-kicker">03 / {t.checklist}</div><h2>{requirements.length} <span>{t.requirements}</span></h2></div><div className="legend"><span><i className="dot red" />{t.missing}</span><span><i className="dot dim" />{t.notProvided}</span></div></div><div className="table"><div className="row row-head"><span>{t.order}</span><span>{t.checklist}</span><span>{t.expiry}</span><span>STATUS</span></div>{requirements.map((item) => { const status = getStatus(item); return <div className="row" key={item.id}><span className="order">{String(item.order).padStart(2, '0')}</span><div className="doc"><strong>{lang === 'bn' ? item.title_bn : item.title_en}</strong><small>{item.id} · {item.mandatory ? t.mandatory : t.optional}</small></div><span className={item.has_expiry ? 'expiry yes' : 'expiry'}>{item.has_expiry ? `◷ ${t.expiry}` : `— ${t.noExpiry}`}</span><span className={`status ${status}`}>{status === 'missing' ? t.missing : t.notProvided}</span></div>})}</div></section>
+    <UploadPanel uploads={uploads} t={t} onAddUploads={onAddUploads} onRemoveUpload={onRemoveUpload} inputRef={pdfInputRef} onInput={onPdfInput} />
     <section className="privacy"><span className="lock">⌑</span><div><strong>{t.local}</strong><p>{t.localCopy}</p></div><span className="privacy-line" /></section>
   </section>
 }
 function Fact({ label, value }) { return <div><small>{label}</small><strong>{value}</strong></div> }
+function UploadPanel({ uploads, t, onAddUploads, onRemoveUpload, inputRef, onInput }) {
+  const [dragging, setDragging] = useState(false)
+  const valid = uploads.filter((file) => !file.error)
+  const totalBytes = valid.reduce((sum, file) => sum + file.bytes, 0)
+  return <section className="upload-panel card">
+    <div className="upload-heading"><div><div className="section-kicker">04 / {t.upload}</div><h2>{t.queue}</h2></div><span>{valid.length} / {MAX_FILES} {t.files} · {formatBytes(totalBytes)} / 50 MB</span></div>
+    <div className={`dropzone ${dragging ? 'is-dragging' : ''}`} onDragOver={(event) => { event.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); onAddUploads(event.dataTransfer.files) }}>
+      <span className="drop-mark">⇩</span><strong>{t.drop}</strong><small>{t.uploadHint}</small><button type="button" onClick={() => inputRef.current?.click()}>{t.browse}</button><input ref={inputRef} hidden type="file" accept="application/pdf,.pdf" multiple onChange={onInput}/>
+    </div>
+    <div className="upload-list">{uploads.length ? uploads.map((file) => <article className={`upload-item ${file.error ? 'has-error' : ''}`} key={file.id}><div className="file-type">PDF</div><div className="file-meta"><strong>{file.name}</strong><small>{formatBytes(file.bytes)} · {file.inspecting ? t.processing : file.error ? t[file.error] : `${file.pages} ${t.pages}`}</small></div><div className="file-state">{file.error ? <span>{t.rejected}</span> : file.inspecting ? <i /> : <b>{file.pages}</b>}</div><button type="button" aria-label={`${t.remove} ${file.name}`} onClick={() => onRemoveUpload(file.id)}>×</button></article>) : <p className="queue-empty">{t.emptyQueue}</p>}</div>
+  </section>
+}
 export default App
