@@ -1,4 +1,4 @@
-import { useReducer, useRef, useState } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { createTenderPackage } from './pdfPackage'
@@ -18,7 +18,7 @@ const copy = {
     checklist: 'Document checklist', requirements: 'requirements', order: 'Order', status: 'Status', mandatory: 'Mandatory', optional: 'Optional', expiry: 'Expiry check', noExpiry: 'No expiry',
     missing: 'Missing', notProvided: 'Not provided', dateNeeded: 'Expiry date needed', expired: 'Expired', ok: 'OK', duplicate: 'Duplicate', enterExpiry: 'Enter expiry date',
     scan: 'Package readiness', clear: 'blocking items', readyText: 'Ready to assemble', progress: 'requirements OK', next: 'Next: upload source PDFs', generate: 'Generate package', generating: 'Generating package…', blockingReasons: 'Blocking reasons', noBlockers: 'No blocking requirements', packageFailed: 'The package could not be generated. Please review the matched PDFs and try again.', packageInvalid: 'The generated package failed validation and was not downloaded. Please review the matched PDFs and try again.',
-    invalid: 'This requirements file could not be opened', errors: 'Fix the items below or choose the correct file.', chooseAnother: 'Choose another file', dismiss: 'Dismiss message', local: 'Local-only workspace', localCopy: 'Tender data and PDFs are processed in this browser only. Nothing is sent to a server.',
+    invalid: 'This requirements file could not be opened', errors: 'Fix the items below or choose the correct file.', chooseAnother: 'Choose another file', dismiss: 'Dismiss message', downloadReady: 'Package validated. Download it below.', downloadPackage: 'Download package PDF', page: 'page', local: 'Local-only workspace', localCopy: 'Tender data and PDFs are processed in this browser only. Nothing is sent to a server.',
     invalidJson: 'The selected file is not valid JSON.', rootObject: 'The file must contain one JSON object.', missingTender: 'The tender details section is missing.', requiredField: '{field} must contain text.', requirementsArray: 'The requirements list must contain at least one item.', requirementObject: '{item} must be an object.', positiveOrder: '{item}.order must be a positive whole number.', booleanField: '{item}.{field} must be true or false.', duplicateId: 'Requirement ID {value} is used more than once.', duplicateOrder: 'Order number {value} is used more than once.',
     workflowLabel: 'Package workflow', workflowTitle: 'Four steps to a submission-ready package', complete: 'Complete', current: 'Do this now', upcoming: 'Up next', workflowSteps: [{ title: 'Import tender', copy: 'Open requirements.json' }, { title: 'Add PDFs', copy: 'Choose all source documents' }, { title: 'Match and check', copy: 'Link files and add expiry dates' }, { title: 'Generate package', copy: 'Download the verified PDF' }],
     blockedLabel: 'BLOCKED', readyLabel: 'READY', footer: 'TenderPulse / precision in every page', liveLocal: 'LIVE · LOCAL', noTenderSignal: 'NO TENDER', privacySignal: '100% PRIVATE', footerState: 'EN · BN · LOCAL FIRST', upload: 'Source PDF intake', drop: 'Drop PDF files here', browse: 'Choose PDFs', uploadHint: 'PDF only · up to 30 files · 50 MB total', queue: 'Upload queue', files: 'files', pages: 'pages', remove: 'Remove', rejected: 'Rejected', processing: 'Reading pages…', corrupt: 'Unreadable or corrupt PDF', protected: 'Password-protected PDF', nonPdf: 'Only PDF files are accepted', fileLimit: 'Maximum of 30 files reached', sizeLimit: 'Total file size cannot exceed 50 MB', emptyQueue: 'No source PDFs selected yet.', emptyQueueHelp: 'Add the tender documents above. Page counts and file safety checks happen automatically.', mapping: 'File mapping', match: 'Match file', chooseFile: 'Choose a PDF file', undo: 'Undo', unmatched: 'Unmatched', mappedTo: 'Mapped to', change: 'Change file', ignore: 'Ignore', accept: 'Accept match', suggestion: 'Match suggestion', highConfidence: 'High confidence', mediumConfidence: 'Medium confidence', filenameReason: 'Filename matches {count} requirement words', identifierReason: 'Filename includes the requirement ID', mapHint: 'Choose one PDF for each requirement. Suggestions are never applied without your approval.'
@@ -32,26 +32,26 @@ const copy = {
     checklist: 'নথির চেকলিস্ট', requirements: 'টি শর্ত', order: 'ক্রম', status: 'অবস্থা', mandatory: 'আবশ্যিক', optional: 'ঐচ্ছিক', expiry: 'মেয়াদ পরীক্ষা', noExpiry: 'মেয়াদ নেই',
     missing: 'অনুপস্থিত', notProvided: 'প্রদান করা হয়নি', dateNeeded: 'মেয়াদ তারিখ প্রয়োজন', expired: 'মেয়াদ শেষ', ok: 'ঠিক আছে', duplicate: 'ডুপ্লিকেট', enterExpiry: 'মেয়াদের তারিখ দিন',
     scan: 'প্যাকেজ প্রস্তুতি', clear: 'টি বাধা', readyText: 'সংযোজনের জন্য প্রস্তুত', progress: 'টি শর্ত ঠিক আছে', next: 'পরবর্তী: উৎস PDF আপলোড করুন', generate: 'প্যাকেজ তৈরি করুন', generating: 'প্যাকেজ তৈরি হচ্ছে…', blockingReasons: 'বাধার কারণ', noBlockers: 'কোনো বাধা নেই', packageFailed: 'প্যাকেজ তৈরি করা যায়নি। মিলানো PDF দেখে আবার চেষ্টা করুন।', packageInvalid: 'তৈরি করা প্যাকেজ যাচাইয়ে ব্যর্থ হয়েছে এবং ডাউনলোড করা হয়নি। মিলানো PDF দেখে আবার চেষ্টা করুন।',
-    invalid: 'শর্তের ফাইলটি খোলা যায়নি', errors: 'নিচের সমস্যাগুলো ঠিক করুন অথবা সঠিক ফাইলটি বেছে নিন।', chooseAnother: 'অন্য ফাইল বেছে নিন', dismiss: 'বার্তাটি বন্ধ করুন', local: 'শুধু স্থানীয় ওয়ার্কস্পেস', localCopy: 'টেন্ডারের তথ্য ও PDF শুধু এই ব্রাউজারেই প্রক্রিয়াকৃত হয়। কোনো সার্ভারে পাঠানো হয় না।',
+    invalid: 'শর্তের ফাইলটি খোলা যায়নি', errors: 'নিচের সমস্যাগুলো ঠিক করুন অথবা সঠিক ফাইলটি বেছে নিন।', chooseAnother: 'অন্য ফাইল বেছে নিন', dismiss: 'বার্তাটি বন্ধ করুন', downloadReady: 'প্যাকেজ যাচাই হয়েছে। নিচে ডাউনলোড করুন।', downloadPackage: 'প্যাকেজ PDF ডাউনলোড করুন', page: 'পৃষ্ঠা', local: 'শুধু স্থানীয় ওয়ার্কস্পেস', localCopy: 'টেন্ডারের তথ্য ও PDF শুধু এই ব্রাউজারেই প্রক্রিয়াকৃত হয়। কোনো সার্ভারে পাঠানো হয় না।',
     invalidJson: 'বাছাই করা ফাইলটি সঠিক JSON নয়।', rootObject: 'ফাইলটিতে একটি JSON অবজেক্ট থাকতে হবে।', missingTender: 'টেন্ডারের তথ্য অংশটি নেই।', requiredField: '{field}-এ লেখা থাকতে হবে।', requirementsArray: 'শর্তের তালিকায় অন্তত একটি আইটেম থাকতে হবে।', requirementObject: '{item} একটি অবজেক্ট হতে হবে।', positiveOrder: '{item}.order একটি ধনাত্মক পূর্ণসংখ্যা হতে হবে।', booleanField: '{item}.{field} true অথবা false হতে হবে।', duplicateId: 'শর্তের ID {value} একাধিকবার ব্যবহার করা হয়েছে।', duplicateOrder: 'ক্রম নম্বর {value} একাধিকবার ব্যবহার করা হয়েছে।',
     workflowLabel: 'প্যাকেজ তৈরির ধাপ', workflowTitle: 'জমা দেওয়ার প্যাকেজ তৈরি করুন চার ধাপে', complete: 'সম্পন্ন', current: 'এখন এটি করুন', upcoming: 'পরবর্তী', workflowSteps: [{ title: 'টেন্ডার আমদানি', copy: 'requirements.json খুলুন' }, { title: 'PDF যোগ করুন', copy: 'সব উৎস নথি বেছে নিন' }, { title: 'মিলিয়ে যাচাই করুন', copy: 'ফাইল মিলিয়ে মেয়াদের তারিখ দিন' }, { title: 'প্যাকেজ তৈরি করুন', copy: 'যাচাইকৃত PDF ডাউনলোড করুন' }],
     blockedLabel: 'বাধা আছে', readyLabel: 'প্রস্তুত', footer: 'TenderPulse / প্রতিটি পাতায় নির্ভুলতা', liveLocal: 'লাইভ · স্থানীয়', noTenderSignal: 'কোনো টেন্ডার নেই', privacySignal: '১০০% ব্যক্তিগত', footerState: 'ইং · বা · শুধু স্থানীয়', upload: 'উৎস PDF গ্রহণ', drop: 'এখানে PDF ফাইল রাখুন', browse: 'PDF বেছে নিন', uploadHint: 'শুধু PDF · সর্বোচ্চ ৩০ ফাইল · মোট ৫০ MB', queue: 'আপলোড সারি', files: 'ফাইল', pages: 'পৃষ্ঠা', remove: 'মুছুন', rejected: 'প্রত্যাখ্যাত', processing: 'পৃষ্ঠা পড়া হচ্ছে…', corrupt: 'PDF পড়া যায়নি বা নষ্ট', protected: 'পাসওয়ার্ড-সুরক্ষিত PDF', nonPdf: 'শুধু PDF গ্রহণ করা হয়', fileLimit: 'সর্বোচ্চ ৩০টি ফাইল গ্রহণযোগ্য', sizeLimit: 'মোট ফাইলের আকার ৫০ MB-এর বেশি হতে পারে না', emptyQueue: 'এখনও কোনো উৎস PDF বাছাই করা হয়নি।', emptyQueueHelp: 'উপরে টেন্ডারের নথি যোগ করুন। পৃষ্ঠা গণনা ও ফাইলের নিরাপত্তা যাচাই স্বয়ংক্রিয়ভাবে হবে।', mapping: 'ফাইল মিলকরণ', match: 'ফাইল মিলান', chooseFile: 'একটি PDF ফাইল বেছে নিন', undo: 'পূর্বাবস্থায় নিন', unmatched: 'অমিল', mappedTo: 'মিলেছে', change: 'ফাইল বদলান', ignore: 'উপেক্ষা করুন', accept: 'মিল গ্রহণ করুন', suggestion: 'মিলের পরামর্শ', highConfidence: 'উচ্চ আস্থা', mediumConfidence: 'মাঝারি আস্থা', filenameReason: 'ফাইলনামে শর্তের {count}টি শব্দ মিলে গেছে', identifierReason: 'ফাইলনামে শর্তের ID রয়েছে', mapHint: 'প্রতিটি শর্তের জন্য একটি PDF বেছে নিন। আপনার অনুমতি ছাড়া কোনো পরামর্শ প্রয়োগ হয় না।'
   }
 }
 
-const initialState = { lang: 'en', package: null, error: null, uploads: [], matches: {}, expiries: {}, suggestionTargets: {}, ignoredSuggestions: {}, isGenerating: false, packageError: null }
+const initialState = { lang: 'en', package: null, error: null, uploads: [], matches: {}, expiries: {}, suggestionTargets: {}, ignoredSuggestions: {}, isGenerating: false, packageError: null, generatedPackage: null }
 
 function reducer(state, action) {
   switch (action.type) {
     case 'TOGGLE_LANG': return { ...state, lang: state.lang === 'en' ? 'bn' : 'en' }
-    case 'LOAD': return { ...state, package: action.payload, error: null, uploads: [], matches: {}, expiries: {}, suggestionTargets: {}, ignoredSuggestions: {}, isGenerating: false, packageError: null }
+    case 'LOAD': return { ...state, package: action.payload, error: null, uploads: [], matches: {}, expiries: {}, suggestionTargets: {}, ignoredSuggestions: {}, isGenerating: false, packageError: null, generatedPackage: null }
     case 'ERROR': return { ...state, error: action.payload }
-    case 'ADD_UPLOADS': return { ...state, uploads: [...state.uploads, ...action.payload] }
+    case 'ADD_UPLOADS': return { ...state, uploads: [...state.uploads, ...action.payload], generatedPackage: null }
     case 'PATCH_UPLOAD': return { ...state, uploads: state.uploads.map((file) => file.id === action.payload.id ? { ...file, ...action.payload } : file) }
     case 'REMOVE_UPLOAD': {
       const suggestionTargets = { ...state.suggestionTargets }, ignoredSuggestions = { ...state.ignoredSuggestions }
       delete suggestionTargets[action.payload]; delete ignoredSuggestions[action.payload]
-      return { ...state, uploads: state.uploads.filter((file) => file.id !== action.payload), matches: Object.fromEntries(Object.entries(state.matches).filter(([, uploadId]) => uploadId !== action.payload)), suggestionTargets, ignoredSuggestions }
+      return { ...state, uploads: state.uploads.filter((file) => file.id !== action.payload), matches: Object.fromEntries(Object.entries(state.matches).filter(([, uploadId]) => uploadId !== action.payload)), suggestionTargets, ignoredSuggestions, generatedPackage: null }
     }
     case 'MATCH_FILE': {
       const matches = { ...state.matches }
@@ -65,13 +65,13 @@ function reducer(state, action) {
       else delete matches[action.payload.requirementId]
       const suggestionTargets = { ...state.suggestionTargets }, ignoredSuggestions = { ...state.ignoredSuggestions }
       delete suggestionTargets[action.payload.uploadId]; delete ignoredSuggestions[action.payload.uploadId]
-      return { ...state, matches, expiries, suggestionTargets, ignoredSuggestions }
+      return { ...state, matches, expiries, suggestionTargets, ignoredSuggestions, generatedPackage: null }
     }
-    case 'SET_EXPIRY': return { ...state, expiries: { ...state.expiries, [action.payload.requirementId]: action.payload.value } }
+    case 'SET_EXPIRY': return { ...state, expiries: { ...state.expiries, [action.payload.requirementId]: action.payload.value }, generatedPackage: null }
     case 'SET_SUGGESTION_TARGET': return { ...state, suggestionTargets: { ...state.suggestionTargets, [action.payload.uploadId]: action.payload.requirementId } }
     case 'IGNORE_SUGGESTION': return { ...state, ignoredSuggestions: { ...state.ignoredSuggestions, [action.payload]: true } }
-    case 'GENERATE_START': return { ...state, isGenerating: true, packageError: null }
-    case 'GENERATE_END': return { ...state, isGenerating: false }
+    case 'GENERATE_START': return { ...state, isGenerating: true, packageError: null, generatedPackage: null }
+    case 'GENERATE_SUCCESS': return { ...state, isGenerating: false, generatedPackage: action.payload }
     case 'GENERATE_ERROR': return { ...state, isGenerating: false, packageError: action.payload }
     default: return state
   }
@@ -157,16 +157,16 @@ function formatBytes(bytes) {
 }
 
 async function validateGeneratedPackage(bytes, expectedPageCount) {
-  let pdf
+  let task
   try {
-    const task = getDocument({ data: bytes.slice(), disableAutoFetch: true, disableStream: true })
-    pdf = await task.promise
+    task = getDocument({ data: bytes.slice(), disableAutoFetch: true, disableStream: true })
+    const pdf = await task.promise
     if (pdf.numPages !== expectedPageCount) throw new Error('validation')
   } catch (error) {
     if (error?.message === 'validation') throw error
     throw new Error('validation')
   } finally {
-    pdf?.destroy().catch(() => {})
+    await task?.destroy().catch(() => {})
   }
 }
 
@@ -174,6 +174,8 @@ function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const inputRef = useRef(null)
   const pdfInputRef = useRef(null)
+  const generatedUrl = state.generatedPackage?.url
+  useEffect(() => () => { if (generatedUrl) URL.revokeObjectURL(generatedUrl) }, [generatedUrl])
   const t = copy[state.lang]
   const requirements = state.package?.requirements ?? []
   const blocking = requirements.filter((item) => ['missing', 'dateNeeded', 'expired'].includes(getStatus(item, state.uploads.find((file) => file.id === state.matches[item.id]), state.expiries[item.id], state.package?.tender.submission_deadline))).length
@@ -191,18 +193,18 @@ function App() {
     } catch { dispatch({ type: 'ERROR', payload: { en: [copy.en.invalidJson], bn: [copy.bn.invalidJson] } }) }
   }
   const inspectUpload = async (upload) => {
-    let pdf
+    let task
     try {
       const bytes = new Uint8Array(await upload.file.arrayBuffer())
       const hash = await sha256(bytes)
       dispatch({ type: 'PATCH_UPLOAD', payload: { id: upload.id, hash } })
-      const task = getDocument({ data: bytes, disableAutoFetch: true, disableStream: true })
-      pdf = await task.promise
+      task = getDocument({ data: bytes, disableAutoFetch: true, disableStream: true })
+      const pdf = await task.promise
       dispatch({ type: 'PATCH_UPLOAD', payload: { id: upload.id, pages: pdf.numPages, inspecting: false } })
     } catch (error) {
       dispatch({ type: 'PATCH_UPLOAD', payload: { id: upload.id, error: getPdfError(error), inspecting: false } })
     } finally {
-      pdf?.destroy().catch(() => {})
+      await task?.destroy().catch(() => {})
     }
   }
   const addUploads = (list) => {
@@ -234,14 +236,7 @@ function App() {
       await validateGeneratedPackage(bytes, expectedPageCount)
       const blob = new Blob([bytes], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = `${state.package.tender.tender_id}_Package.pdf`
-      document.body.appendChild(anchor)
-      anchor.click()
-      anchor.remove()
-      window.setTimeout(() => URL.revokeObjectURL(url), 0)
-      dispatch({ type: 'GENERATE_END' })
+      dispatch({ type: 'GENERATE_SUCCESS', payload: { url, filename: `${state.package.tender.tender_id}_Package.pdf` } })
     } catch (error) {
       dispatch({ type: 'GENERATE_ERROR', payload: error?.message === 'validation' ? 'validation' : 'generation' })
     }
@@ -257,7 +252,7 @@ function App() {
     </section>
     <Workflow t={t} activeStep={workflowStep} />
     {state.error && <section className="error card" role="alert"><div className="error-icon">!</div><div className="error-copy"><strong>{t.invalid}</strong><p>{t.errors}</p><ul>{state.error[state.lang].map((error) => <li key={error}>{error}</li>)}</ul><div className="error-actions"><button type="button" onClick={() => inputRef.current?.click()}>{t.chooseAnother}</button><button type="button" onClick={() => dispatch({type:'ERROR', payload:null})}>{t.dismiss}</button></div></div></section>}
-    {!state.package ? <section className="empty card"><span className="empty-step">{t.noTenderEyebrow}</span><div className="empty-radar"><span>⌁</span></div><h2>{t.noTender}</h2><p>{t.noTenderCopy}</p><small>{t.noTenderExpected}</small><button className="text-button" onClick={() => inputRef.current?.click()}>{t.import} <span>→</span></button></section> : <Workspace tender={state.package.tender} requirements={requirements} t={t} lang={state.lang} blocking={blocking} uploads={state.uploads} matches={state.matches} expiries={state.expiries} suggestionTargets={state.suggestionTargets} ignoredSuggestions={state.ignoredSuggestions} isGenerating={state.isGenerating} packageError={state.packageError} onGenerate={generatePackage} onAddUploads={addUploads} onRemoveUpload={(id) => dispatch({ type: 'REMOVE_UPLOAD', payload: id })} onMatch={(requirementId, uploadId) => dispatch({ type: 'MATCH_FILE', payload: { requirementId, uploadId } })} onExpiry={(requirementId, value) => dispatch({ type: 'SET_EXPIRY', payload: { requirementId, value } })} onSuggestionTarget={(uploadId, requirementId) => dispatch({ type: 'SET_SUGGESTION_TARGET', payload: { uploadId, requirementId } })} onIgnoreSuggestion={(uploadId) => dispatch({ type: 'IGNORE_SUGGESTION', payload: uploadId })} pdfInputRef={pdfInputRef} onPdfInput={handlePdfInput}/>}
+    {!state.package ? <section className="empty card"><span className="empty-step">{t.noTenderEyebrow}</span><div className="empty-radar"><span>⌁</span></div><h2>{t.noTender}</h2><p>{t.noTenderCopy}</p><small>{t.noTenderExpected}</small><button className="text-button" onClick={() => inputRef.current?.click()}>{t.import} <span>→</span></button></section> : <Workspace tender={state.package.tender} requirements={requirements} t={t} lang={state.lang} blocking={blocking} uploads={state.uploads} matches={state.matches} expiries={state.expiries} suggestionTargets={state.suggestionTargets} ignoredSuggestions={state.ignoredSuggestions} isGenerating={state.isGenerating} packageError={state.packageError} generatedPackage={state.generatedPackage} onGenerate={generatePackage} onAddUploads={addUploads} onRemoveUpload={(id) => dispatch({ type: 'REMOVE_UPLOAD', payload: id })} onMatch={(requirementId, uploadId) => dispatch({ type: 'MATCH_FILE', payload: { requirementId, uploadId } })} onExpiry={(requirementId, value) => dispatch({ type: 'SET_EXPIRY', payload: { requirementId, value } })} onSuggestionTarget={(uploadId, requirementId) => dispatch({ type: 'SET_SUGGESTION_TARGET', payload: { uploadId, requirementId } })} onIgnoreSuggestion={(uploadId) => dispatch({ type: 'IGNORE_SUGGESTION', payload: uploadId })} pdfInputRef={pdfInputRef} onPdfInput={handlePdfInput}/>}
     <footer><span>{t.footer}</span><span>{t.footerState}</span></footer>
   </main>
 }
@@ -266,7 +261,7 @@ function Workflow({ t, activeStep }) {
   return <section className="workflow" aria-label={t.workflowLabel}><div className="workflow-heading"><span>{t.workflowLabel}</span><strong>{t.workflowTitle}</strong></div><ol>{t.workflowSteps.map((step, index) => { const state = index < activeStep ? 'complete' : index === activeStep ? 'current' : 'upcoming'; return <li className={state} key={step.title}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{step.title}</strong><small>{step.copy}</small></div><em>{t[state]}</em></li> })}</ol></section>
 }
 
-function Workspace({ tender, requirements, t, lang, blocking, uploads, matches, expiries, suggestionTargets, ignoredSuggestions, isGenerating, packageError, onGenerate, onAddUploads, onRemoveUpload, onMatch, onExpiry, onSuggestionTarget, onIgnoreSuggestion, pdfInputRef, onPdfInput }) {
+function Workspace({ tender, requirements, t, lang, blocking, uploads, matches, expiries, suggestionTargets, ignoredSuggestions, isGenerating, packageError, generatedPackage, onGenerate, onAddUploads, onRemoveUpload, onMatch, onExpiry, onSuggestionTarget, onIgnoreSuggestion, pdfInputRef, onPdfInput }) {
   const duplicateIds = getDuplicateIds(uploads)
   const statuses = requirements.map((item) => getStatus(item, uploads.find((file) => file.id === matches[item.id]), expiries[item.id], tender.submission_deadline))
   const statusCounts = statuses.reduce((counts, status) => ({ ...counts, [status]: (counts[status] ?? 0) + 1 }), {})
@@ -274,8 +269,8 @@ function Workspace({ tender, requirements, t, lang, blocking, uploads, matches, 
   const blockingReasons = ['missing', 'dateNeeded', 'expired'].filter((status) => statusCounts[status])
   return <section className="workspace">
     <div className="tender-card card"><div className="section-kicker">01 / {t.tender}</div><div className="tender-heading"><span className="id-chip">{tender.tender_id}</span><h2>{tender.title}</h2></div><div className="facts"><Fact label={t.entity} value={tender.procuring_entity}/><Fact label={t.bidder} value={tender.bidder}/><Fact label={t.deadline} value={new Date(`${tender.submission_deadline}T00:00:00`).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-GB', { day:'2-digit', month:'short', year:'numeric' })}/></div></div>
-    <aside className={`readiness card ${blocking ? '' : 'is-ready'}`} data-state-label={blocking ? t.blockedLabel : t.readyLabel}><div className="section-kicker">02 / {t.scan}</div><div className="readiness-number"><span>{blocking}</span><small>{t.clear}</small></div><div className="meter"><i style={{width: `${requirements.length ? (readyCount / requirements.length) * 100 : 0}%`}} /></div><p>{readyCount} / {requirements.length} {t.progress}</p><div className="blocking-reasons">{blockingReasons.length ? <><strong>{t.blockingReasons}</strong><ul>{blockingReasons.map((status) => <li key={status}><span className={`reason-dot ${status}`} />{t[status]}<b>{statusCounts[status]}</b></li>)}</ul></> : <p className="clear-state">{t.noBlockers}</p>}</div>{packageError && <p className="package-error">{packageError === 'validation' ? t.packageInvalid : t.packageFailed}</p>}<button onClick={onGenerate} disabled={blocking > 0 || isGenerating}>{isGenerating ? t.generating : t.generate} <span>→</span></button></aside>
-    <section className="checklist card"><div className="checklist-top"><div><div className="section-kicker">03 / {t.checklist}</div><h2>{requirements.length} <span>{t.requirements}</span></h2></div><div className="legend"><span><i className="dot red" />{t.missing}</span><span><i className="dot amber" />{t.dateNeeded}</span><span><i className="dot dim" />{t.notProvided}</span><span><i className="dot cyan" />{t.ok}</span></div></div><p className="mapping-hint">⌁ {t.mapHint}</p><div className="table"><div className="row row-head"><span>{t.order}</span><span>{t.checklist}</span><span>{t.expiry}</span><span>{t.mapping}</span><span>{t.status}</span></div>{requirements.map((item) => { const matchedId = matches[item.id]; const matchedUpload = uploads.find((file) => file.id === matchedId); const status = getStatus(item, matchedUpload, expiries[item.id], tender.submission_deadline); const choices = uploads.filter((file) => !file.error && !file.inspecting); return <div className="row" key={item.id}><span className="order">{String(item.order).padStart(2, '0')}</span><div className="doc"><strong>{lang === 'bn' ? item.title_bn : item.title_en}</strong><small>{item.id} · {item.mandatory ? t.mandatory : t.optional}</small></div><span className={item.has_expiry ? 'expiry yes' : 'expiry'}>{item.has_expiry && matchedUpload ? <input aria-label={`${t.enterExpiry} ${item.id}`} type="date" value={expiries[item.id] ?? ''} onChange={(event) => onExpiry(item.id, event.target.value)} /> : item.has_expiry ? `◷ ${t.expiry}` : `— ${t.noExpiry}`}</span><div className="match-control"><select aria-label={`${t.match} ${item.id}`} value={matchedId || ''} onChange={(event) => onMatch(item.id, event.target.value)}><option value="">{t.chooseFile}</option>{choices.map((file) => { const owner = Object.keys(matches).find((requirementId) => matches[requirementId] === file.id); const blockedDuplicate = Boolean(file.hash && duplicateIds.has(file.id) && owner && owner !== item.id); return <option disabled={blockedDuplicate} value={file.id} key={file.id}>{file.name}{owner && owner !== item.id ? ` — ${owner}` : ''}</option> })}</select>{matchedUpload && <button type="button" onClick={() => onMatch(item.id, '')}>{t.undo}</button>}</div><span className={`status ${status}`}>{t[status]}</span></div>})}</div></section>
+    <aside className={`readiness card ${blocking ? '' : 'is-ready'}`} data-state-label={blocking ? t.blockedLabel : t.readyLabel}><div className="section-kicker">02 / {t.scan}</div><div className="readiness-number"><span>{blocking}</span><small>{t.clear}</small></div><div className="meter"><i style={{width: `${requirements.length ? (readyCount / requirements.length) * 100 : 0}%`}} /></div><p>{readyCount} / {requirements.length} {t.progress}</p><div className="blocking-reasons">{blockingReasons.length ? <><strong>{t.blockingReasons}</strong><ul>{blockingReasons.map((status) => <li key={status}><span className={`reason-dot ${status}`} />{t[status]}<b>{statusCounts[status]}</b></li>)}</ul></> : <p className="clear-state">{t.noBlockers}</p>}</div>{packageError && <p className="package-error">{packageError === 'validation' ? t.packageInvalid : t.packageFailed}</p>}<button onClick={onGenerate} disabled={blocking > 0 || isGenerating}>{isGenerating ? t.generating : t.generate} <span>→</span></button>{generatedPackage && <div className="download-ready"><p>{t.downloadReady}</p><a href={generatedPackage.url} download={generatedPackage.filename}>{t.downloadPackage} ↓</a></div>}</aside>
+    <section className="checklist card"><div className="checklist-top"><div><div className="section-kicker">03 / {t.checklist}</div><h2>{requirements.length} <span>{t.requirements}</span></h2></div><div className="legend"><span><i className="dot red" />{t.missing}</span><span><i className="dot amber" />{t.dateNeeded}</span><span><i className="dot dim" />{t.notProvided}</span><span><i className="dot cyan" />{t.ok}</span></div></div><p className="mapping-hint">⌁ {t.mapHint}</p><div className="table"><div className="row row-head"><span>{t.order}</span><span>{t.checklist}</span><span>{t.expiry}</span><span>{t.mapping}</span><span>{t.status}</span></div>{requirements.map((item) => { const matchedId = matches[item.id]; const matchedUpload = uploads.find((file) => file.id === matchedId); const status = getStatus(item, matchedUpload, expiries[item.id], tender.submission_deadline); const choices = uploads.filter((file) => !file.error && !file.inspecting); return <div className="row" key={item.id}><span className="order">{String(item.order).padStart(2, '0')}</span><div className="doc"><strong>{lang === 'bn' ? item.title_bn : item.title_en}</strong><small>{item.id} · {item.mandatory ? t.mandatory : t.optional}</small></div><span className={item.has_expiry ? 'expiry yes' : 'expiry'}>{item.has_expiry && matchedUpload ? <input aria-label={`${t.enterExpiry} ${item.id}`} type="date" value={expiries[item.id] ?? ''} onChange={(event) => onExpiry(item.id, event.target.value)} /> : item.has_expiry ? `◷ ${t.expiry}` : `— ${t.noExpiry}`}</span><div className="match-control"><select aria-label={`${t.match} ${item.id}`} value={matchedId || ''} onChange={(event) => onMatch(item.id, event.target.value)}><option value="">{t.chooseFile}</option>{choices.map((file) => { const owner = Object.keys(matches).find((requirementId) => matches[requirementId] === file.id); const identicalOwner = file.hash && Object.entries(matches).find(([, uploadId]) => uploads.find((upload) => upload.id === uploadId)?.hash === file.hash)?.[0]; const blockedDuplicate = Boolean(identicalOwner && identicalOwner !== item.id); return <option disabled={blockedDuplicate} value={file.id} key={file.id}>{file.name}{owner && owner !== item.id ? ` — ${owner}` : ''}</option> })}</select>{matchedUpload && <button type="button" onClick={() => onMatch(item.id, '')}>{t.undo}</button>}</div><span className={`status ${status}`}>{t[status]}</span></div>})}</div></section>
     <UploadPanel uploads={uploads} matches={matches} requirements={requirements} duplicateIds={duplicateIds} suggestionTargets={suggestionTargets} ignoredSuggestions={ignoredSuggestions} t={t} lang={lang} onAddUploads={onAddUploads} onRemoveUpload={onRemoveUpload} onMatch={onMatch} onSuggestionTarget={onSuggestionTarget} onIgnoreSuggestion={onIgnoreSuggestion} inputRef={pdfInputRef} onInput={onPdfInput} />
     <section className="privacy"><span className="lock">⌑</span><div><strong>{t.local}</strong><p>{t.localCopy}</p></div><span className="privacy-line" /></section>
   </section>
@@ -292,13 +287,14 @@ function UploadPanel({ uploads, matches, requirements, duplicateIds, suggestionT
     </div>
     <div className="upload-list">{uploads.length ? uploads.map((file) => {
       const requirement = requirements.find((item) => matches[item.id] === file.id)
-      const suggested = !file.error && !file.inspecting && !requirement && !ignoredSuggestions[file.id] ? getFilenameSuggestion(file, requirements, matches) : null
-      const suggestedRequirementId = suggestionTargets[file.id] ?? suggested?.requirementId
-      const suggestedRequirement = requirements.find((item) => item.id === suggestedRequirementId)
+      const duplicateMappedElsewhere = file.hash && Object.values(matches).some((uploadId) => uploads.find((upload) => upload.id === uploadId)?.hash === file.hash)
+      const suggested = !file.error && !file.inspecting && !requirement && !duplicateMappedElsewhere && !ignoredSuggestions[file.id] ? getFilenameSuggestion(file, requirements, matches) : null
       const availableRequirements = requirements.filter((item) => !matches[item.id])
+      const suggestedRequirementId = availableRequirements.some((item) => item.id === suggestionTargets[file.id]) ? suggestionTargets[file.id] : suggested?.requirementId
+      const suggestedRequirement = requirements.find((item) => item.id === suggestedRequirementId)
       const reason = suggested?.idMatch ? t.identifierReason : suggested ? t.filenameReason.replace('{count}', suggested.matchedWords) : ''
       return <article className={`upload-item ${file.error ? 'has-error' : ''} ${requirement ? 'is-mapped' : ''} ${suggested ? 'has-suggestion' : ''}`} key={file.id}>
-        <div className="file-type">PDF</div><div className="file-meta"><strong>{file.name}{duplicateIds.has(file.id) && <mark>{t.duplicate}</mark>}</strong><small>{formatBytes(file.bytes)} · {file.inspecting ? t.processing : file.error ? t[file.error] : `${file.pages} ${t.pages}`}</small></div><div className="file-state">{file.error ? <span>{t.rejected}</span> : file.inspecting ? <i /> : <b>{file.pages}</b>}</div><div className={`mapping-state ${requirement ? 'mapped' : ''}`}>{requirement ? <><span>{t.mappedTo}</span><strong>{requirement.id}</strong></> : <span>{t.unmatched}</span>}</div><button type="button" aria-label={`${t.remove} ${file.name}`} onClick={() => onRemoveUpload(file.id)}>×</button>
+        <div className="file-type">PDF</div><div className="file-meta"><strong>{file.name}{duplicateIds.has(file.id) && <mark>{t.duplicate}</mark>}</strong><small>{formatBytes(file.bytes)} · {file.inspecting ? t.processing : file.error ? t[file.error] : `${file.pages} ${file.pages === 1 ? t.page : t.pages}`}</small></div><div className="file-state">{file.error ? <span>{t.rejected}</span> : file.inspecting ? <i /> : <b>{file.pages}</b>}</div><div className={`mapping-state ${requirement ? 'mapped' : ''}`}>{requirement ? <><span>{t.mappedTo}</span><strong>{requirement.id}</strong></> : <span>{t.unmatched}</span>}</div><button type="button" aria-label={`${t.remove} ${file.name}`} onClick={() => onRemoveUpload(file.id)}>×</button>
         {suggested && <div className="suggestion"><div><span>{t.suggestion}</span><b>{suggested.requirementId} · {suggested.score >= .8 ? t.highConfidence : t.mediumConfidence}</b><small>{reason}</small></div><select aria-label={`${t.change} ${file.name}`} value={suggestedRequirementId} onChange={(event) => onSuggestionTarget(file.id, event.target.value)}>{availableRequirements.map((item) => <option key={item.id} value={item.id}>{item.id} — {lang === 'bn' ? item.title_bn : item.title_en}</option>)}</select><div className="suggestion-actions"><button type="button" onClick={() => onMatch(suggestedRequirementId, file.id)} disabled={!suggestedRequirement}>{t.accept}</button><button type="button" onClick={() => onIgnoreSuggestion(file.id)}>{t.ignore}</button></div></div>}
       </article>
     }) : <div className="queue-empty"><strong>{t.emptyQueue}</strong><span>{t.emptyQueueHelp}</span></div>}</div>

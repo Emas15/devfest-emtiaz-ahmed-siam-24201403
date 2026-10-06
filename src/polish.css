@@ -51,6 +51,10 @@
 .error .error-actions button:first-child { border-color: var(--cyan); color: #071012; background: var(--cyan); }
 
 .readiness.is-ready:after { color: var(--lime); }
+.download-ready { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.download-ready p { margin: 0 0 10px; color: var(--lime); line-height: 1.5; }
+.download-ready a { display: block; padding: 10px; border: 1px solid var(--cyan); color: var(--cyan); text-align: center; text-decoration: none; font-size: 10px; font-weight: 700; }
+.download-ready a:hover { background: var(--cyan); color: #071012; }
 .queue-empty { display: block; }
 .queue-empty strong,
 .queue-empty span { display: block; }
