@@ -48,6 +48,47 @@ function drawCover(page, tender, included, fonts) {
   })
 }
 
+function truncateText(font, text, size, maxWidth) {
+  if (font.widthOfTextAtSize(text, size) <= maxWidth) return text
+  let shortened = text
+  while (shortened.length && font.widthOfTextAtSize(`${shortened}…`, size) > maxWidth) shortened = shortened.slice(0, -1)
+  return `${shortened}…`
+}
+
+function drawIndex(page, tender, documents, fonts) {
+  const { width, height } = page.getSize()
+  const ink = rgb(0.06, 0.09, 0.1)
+  const cyan = rgb(0.12, 0.58, 0.57)
+  const muted = rgb(0.33, 0.39, 0.4)
+  const lineHeight = Math.max(14, Math.min(18, 510 / Math.max(documents.length, 1)))
+  const itemSize = documents.length > 20 ? 8 : 9
+  const pageColumnWidth = 56
+  const titleWidth = width - (MARGIN * 2) - pageColumnWidth - 40
+
+  page.drawRectangle({ x: 0, y: 0, width, height, color: rgb(0.98, 0.99, 0.99) })
+  page.drawRectangle({ x: 0, y: height - 14, width, height: 14, color: cyan })
+  page.drawText('PACKAGE INDEX', { x: MARGIN, y: height - 85, size: 10, font: fonts.bold, color: cyan, characterSpacing: 1.4 })
+  page.drawText(tender.tender_id, { x: MARGIN, y: height - 125, size: 20, font: fonts.bold, color: ink })
+  page.drawText('Included documents and their starting pages', { x: MARGIN, y: height - 151, size: 10, font: fonts.regular, color: muted })
+
+  let y = height - 205
+  page.drawLine({ start: { x: MARGIN, y }, end: { x: width - MARGIN, y }, thickness: 0.8, color: rgb(0.76, 0.81, 0.81) })
+  y -= 20
+  page.drawText('DOCUMENT', { x: MARGIN, y, size: 7.5, font: fonts.bold, color: muted, characterSpacing: 0.7 })
+  const pageHeader = 'START PAGE'
+  page.drawText(pageHeader, { x: width - MARGIN - fonts.bold.widthOfTextAtSize(pageHeader, 7.5), y, size: 7.5, font: fonts.bold, color: muted, characterSpacing: 0.7 })
+  y -= 20
+
+  documents.forEach((document) => {
+    const order = String(document.order).padStart(2, '0')
+    const title = truncateText(fonts.regular, `${order}  ${document.title_en}`, itemSize, titleWidth)
+    page.drawText(title, { x: MARGIN, y, size: itemSize, font: fonts.regular, color: ink })
+    const startPage = String(document.startPage)
+    page.drawText(startPage, { x: width - MARGIN - fonts.bold.widthOfTextAtSize(startPage, itemSize), y, size: itemSize, font: fonts.bold, color: cyan })
+    y -= lineHeight
+  })
+}
+
 function drawWrapped(page, text, x, y, maxWidth, size, font, color, lineHeight) {
   const words = text.split(/\s+/)
   let line = ''
@@ -67,13 +108,28 @@ export async function createTenderPackage({ tender, requirements, uploads, match
   const output = await PDFDocument.create()
   const fonts = { regular: await output.embedFont(StandardFonts.Helvetica), bold: await output.embedFont(StandardFonts.HelveticaBold) }
   const included = requirements.filter((requirement) => matches[requirement.id]).sort((a, b) => a.order - b.order)
-  const cover = output.addPage(A4)
-  drawCover(cover, tender, included, fonts)
+  const documents = []
 
   for (const requirement of included) {
     const upload = uploads.find((file) => file.id === matches[requirement.id])
     if (!upload) continue
     const source = await PDFDocument.load(await upload.file.arrayBuffer())
+    documents.push({ ...requirement, source, pageCount: source.getPageCount() })
+  }
+
+  let nextStartPage = 3
+  const indexDocuments = documents.map((document) => {
+    const indexed = { ...document, startPage: nextStartPage }
+    nextStartPage += document.pageCount
+    return indexed
+  })
+  const cover = output.addPage(A4)
+  drawCover(cover, tender, indexDocuments, fonts)
+  const index = output.addPage(A4)
+  drawIndex(index, tender, indexDocuments, fonts)
+
+  for (const document of documents) {
+    const { source } = document
     const sourcePages = source.getPages()
     for (let index = 0; index < sourcePages.length; index += 1) {
       const sourcePage = sourcePages[index]
