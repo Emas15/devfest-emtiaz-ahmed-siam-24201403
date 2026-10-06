@@ -4,7 +4,7 @@ const copy = {
   en: {
     eyebrow: 'Tender package command center', title: 'Make every submission', accent: 'submission-ready.',
     subtitle: 'Import tender requirements, trace every document, and build a verified package — entirely in your browser.',
-    import: 'Import requirements.json', sample: 'Load sample brief', language: 'বাংলা',
+    import: 'Import requirements.json', language: 'বাংলা',
     importHint: 'JSON stays on this device. Nothing is uploaded.', noTender: 'Awaiting tender brief', noTenderCopy: 'Start by importing the tender requirements file to unlock the package checklist.',
     tender: 'Tender intelligence', entity: 'Procuring entity', bidder: 'Bidder', deadline: 'Submission deadline',
     checklist: 'Document checklist', requirements: 'requirements', order: 'Order', mandatory: 'Mandatory', optional: 'Optional', expiry: 'Expiry check', noExpiry: 'No expiry',
@@ -16,7 +16,7 @@ const copy = {
   bn: {
     eyebrow: 'টেন্ডার প্যাকেজ কমান্ড সেন্টার', title: 'প্রতিটি জমা দিন', accent: 'নির্ভুলভাবে।',
     subtitle: 'টেন্ডারের শর্ত আমদানি করুন, প্রতিটি নথি ট্র্যাক করুন এবং যাচাইকৃত প্যাকেজ তৈরি করুন — সম্পূর্ণ আপনার ব্রাউজারে।',
-    import: 'requirements.json আমদানি করুন', sample: 'নমুনা ব্রিফ লোড করুন', language: 'English',
+    import: 'requirements.json আমদানি করুন', language: 'English',
     importHint: 'JSON আপনার ডিভাইসেই থাকে। কিছুই আপলোড করা হয় না।', noTender: 'টেন্ডার ব্রিফের অপেক্ষায়', noTenderCopy: 'প্যাকেজ চেকলিস্ট চালু করতে টেন্ডারের requirements ফাইল আমদানি করুন।',
     tender: 'টেন্ডার তথ্য', entity: 'ক্রয়কারী সংস্থা', bidder: 'দরদাতা', deadline: 'জমার শেষ তারিখ',
     checklist: 'নথির চেকলিস্ট', requirements: 'টি শর্ত', order: 'ক্রম', mandatory: 'আবশ্যিক', optional: 'ঐচ্ছিক', expiry: 'মেয়াদ পরীক্ষা', noExpiry: 'মেয়াদ নেই',
@@ -80,20 +80,12 @@ function App() {
       else dispatch({ type: 'LOAD', payload: { tender: data.tender, requirements: [...data.requirements].sort((a, b) => a.order - b.order) } })
     } catch { dispatch({ type: 'ERROR', payload: ['The selected file is not valid JSON.'] }) }
   }
-  const loadSample = async () => {
-    try {
-      const data = await (await fetch('/sample-pack/requirements.json')).json()
-      const errors = validateRequirements(data)
-      if (errors.length) dispatch({ type: 'ERROR', payload: errors })
-      else dispatch({ type: 'LOAD', payload: { tender: data.tender, requirements: [...data.requirements].sort((a, b) => a.order - b.order) } })
-    } catch { dispatch({ type: 'ERROR', payload: ['Sample requirements could not be loaded.'] }) }
-  }
   return <main className="shell">
     <div className="orb orb-a" /><div className="orb orb-b" /><div className="grid" />
     <nav className="nav"><a className="brand" href="#top" aria-label="TenderPulse home"><span className="brand-mark">T</span><span>TENDER<span>PULSE</span></span></a><button className="language" onClick={() => dispatch({ type: 'TOGGLE_LANG' })}><span className="globe">◎</span>{t.language}</button></nav>
     <section className="hero" id="top">
       <div className="hero-copy"><p className="eyebrow"><i />{t.eyebrow}</p><h1>{t.title}<br /><em>{t.accent}</em></h1><p className="subtitle">{t.subtitle}</p>
-        <div className="actions"><button className="primary" onClick={() => inputRef.current?.click()}>{t.import}<span>↗</span></button><button className="secondary" onClick={loadSample}>{t.sample}</button><input ref={inputRef} hidden type="file" accept="application/json,.json" onChange={handleFile}/></div><p className="hint">⌁ {t.importHint}</p>
+        <div className="actions"><button className="primary" onClick={() => inputRef.current?.click()}>{t.import}<span>↗</span></button><input ref={inputRef} hidden type="file" accept="application/json,.json" onChange={handleFile}/></div><p className="hint">⌁ {t.importHint}</p>
       </div>
       <div className="signal-card"><div className="signal-top"><span>LIVE · LOCAL</span><span className="pulse" /></div><div className="signal-ring"><span>{requirements.length || '—'}</span><small>{requirements.length ? t.requirements : 'REQUIREMENTS'}</small></div><div className="signal-bottom"><span>{state.package?.tender.tender_id || 'NO TENDER'}</span><span>◌ 100% PRIVATE</span></div></div>
     </section>
