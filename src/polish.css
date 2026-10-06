@@ -67,4 +67,11 @@
   .workflow li { border-right: 0; border-bottom: 1px solid var(--line); }
   .workflow li:last-child { border-bottom: 0; }
   .error-actions { align-items: stretch; flex-direction: column; }
+  .checklist .row > .expiry { display: block; grid-column: 2 / 4; grid-row: 2; padding: 0 0 10px; }
+  .checklist .row > .match-control { grid-column: 2 / 4; grid-row: 3; }
+  .checklist .row:has(.expiry input) > .match-control { grid-row: 3; }
+  .checklist .row > .status { grid-column: 3; grid-row: 1; }
+  .checklist .row:has(.expiry input) > .status { grid-row: 1; }
+  .checklist .row-head > :nth-child(3) { display: none; }
+  .match-control button { display: inline-flex; }
 }
