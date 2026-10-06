@@ -2,13 +2,14 @@
 
 A browser-only tender package workspace for the AI DevFest Tender Document Package Builder challenge.
 
-## Current slice
+## What it does
 
-- Imports and validates local `requirements.json` files.
-- Sorts requirements by tender order.
-- Presents tender details and a status checklist.
-- Supports English and Bangla across the interface.
-- Keeps imported tender data in one reducer-managed client-side state object.
+- Imports and validates a local `requirements.json` file.
+- Accepts, checks, hashes, counts, and matches local PDFs without uploading them.
+- Tracks missing documents, expiry dates, duplicates, and package readiness.
+- Builds a verified PDF package with cover, index, ordered documents, and page footers.
+- Supports English and Bangla throughout the interface.
+- Keeps workflow state in one reducer-managed browser state object.
 
 ## Run locally
 
@@ -17,4 +18,4 @@ npm install
 npm run dev
 ```
 
-No API keys, server, database, or participant-controlled storage are used.
+No API key, backend, database, remote storage, external font, or runtime network request is used. All tender data and PDF processing stay in the browser.

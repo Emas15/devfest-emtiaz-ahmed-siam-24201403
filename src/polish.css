@@ -1,0 +1,66 @@
+.workflow {
+  max-width: 1240px;
+  margin: 0 auto 15px;
+  position: relative;
+  border: 1px solid var(--line);
+  background: #0d1316;
+}
+
+.workflow-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.workflow-heading span,
+.workflow li > span,
+.workflow li em {
+  font: 9px ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: .7px;
+}
+
+.workflow-heading span { color: var(--cyan); text-transform: uppercase; }
+.workflow-heading strong { color: #b6c1c4; font-size: 11px; font-weight: 500; }
+.workflow ol { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; padding: 0; list-style: none; }
+.workflow li { min-width: 0; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 9px; position: relative; padding: 16px; border-right: 1px solid var(--line); }
+.workflow li:last-child { border-right: 0; }
+.workflow li > span { color: #647377; padding-top: 2px; }
+.workflow li div { min-width: 0; }
+.workflow li strong,
+.workflow li small { display: block; }
+.workflow li strong { color: #c2ccce; font-size: 11px; }
+.workflow li small { margin-top: 5px; color: #68777b; font-size: 9px; line-height: 1.4; }
+.workflow li em { grid-column: 2; margin-top: 9px; color: #69777a; font-style: normal; text-transform: uppercase; }
+.workflow li.complete > span,
+.workflow li.complete em { color: var(--cyan); }
+.workflow li.current { background: #152016; box-shadow: inset 0 2px var(--lime); }
+.workflow li.current > span,
+.workflow li.current em { color: var(--lime); }
+.workflow li.current strong { color: #f0f5f4; }
+
+.empty-step { display: block; margin-bottom: 21px; color: var(--lime); font: 9px ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: 1px; text-transform: uppercase; }
+.empty > small { display: block; margin: 13px auto 0; color: #6f8084; font: 9px ui-monospace, SFMono-Regular, Consolas, monospace; }
+
+.error { align-items: flex-start; }
+.error-copy { flex: 1; }
+.error-actions { display: flex; gap: 9px; margin-top: 13px; }
+.error .error-actions button { margin: 0; padding: 8px 10px; border: 1px solid #87505a; background: transparent; color: #ffd1d5; font: 700 9px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.error .error-actions button:first-child { border-color: var(--cyan); color: #071012; background: var(--cyan); }
+
+.readiness.is-ready:after { color: var(--lime); }
+.queue-empty { display: block; }
+.queue-empty strong,
+.queue-empty span { display: block; }
+.queue-empty strong { color: #a9b5b7; font-size: 11px; }
+.queue-empty span { max-width: 560px; margin-top: 6px; color: #69787c; line-height: 1.5; }
+
+@media (max-width: 760px) {
+  .workflow-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .workflow ol { grid-template-columns: 1fr; }
+  .workflow li { border-right: 0; border-bottom: 1px solid var(--line); }
+  .workflow li:last-child { border-bottom: 0; }
+  .error-actions { align-items: stretch; flex-direction: column; }
+}

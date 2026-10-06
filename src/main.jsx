@@ -5,6 +5,7 @@ import './upload.css'
 import './matching.css'
 import './status.css'
 import './readiness.css'
+import './polish.css'
 import App from './App'
 
 createRoot(document.getElementById('root')).render(
