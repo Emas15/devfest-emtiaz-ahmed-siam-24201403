@@ -40,9 +40,11 @@ function drawCover(page, tender, included, fonts) {
   y -= 24
   page.drawText('INCLUDED DOCUMENTS', { x: MARGIN, y, size: 9, font: fonts.bold, color: cyan, characterSpacing: 1 })
   y -= 22
+  const listLineHeight = Math.max(10, Math.min(19, 320 / Math.max(included.length, 1)))
+  const listSize = included.length > 15 ? 7.5 : 9.5
   included.forEach((item) => {
-    page.drawText(`${String(item.order).padStart(2, '0')}  ${item.title_en}`, { x: MARGIN, y, size: 9.5, font: fonts.regular, color: ink })
-    y -= 19
+    page.drawText(`${String(item.order).padStart(2, '0')}  ${item.title_en}`, { x: MARGIN, y, size: listSize, font: fonts.regular, color: ink })
+    y -= listLineHeight
   })
 }
 
